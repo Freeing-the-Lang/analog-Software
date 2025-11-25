@@ -1,0 +1,122 @@
+name: "🧠 Analog-AI — SpongeLang → Meaning Curve Engine (v2.5)"
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - "v*"
+  pull_request:
+    types: [ closed ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: analog-ai-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  analog-meaning-build:
+    name: "🧠 Build & Run Meaning Curve Engine"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      # ----- 기본 세팅 -----
+      - name: "📦 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "🦀 Setup Rust"
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: "📚 Install NASM (Linux/Mac)"
+        if: runner.os != 'Windows'
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y nasm || true
+
+      - name: "📚 Install NASM (Windows)"
+        if: runner.os == 'Windows'
+        run: |
+          choco install nasm -y
+
+      # ----- 컴파일 -----
+      - name: "⚙️ Build Meaning Engine"
+        run: cargo build --release
+
+      # ----- 테스트 -----
+      - name: "🧪 SpongeLang Semantic Tests"
+        run: cargo test --all --verbose
+
+      # ----- ★ sample.sp 자동 생성 -----
+      - name: "📄 Generate sample.sp"
+        shell: bash
+        run: |
+          echo "Creating sample.sp..."
+          mkdir -p input
+          cat << 'EOF' > input/sample.sp
+# Digital → Analog Thinking Demo
+# SpongeLang Sample File (sample.sp)
+
+# 1) 디지털식 분기
+if user_score > 80 -> pass
+else -> retry
+
+# 2) 아날로그식 매핑
+emotion_level = map(feeling, 0..1 -> calm..focus)
+
+# 3) 의미 기반 함수
+fn blend(a, b) = (a * 0.6) + (b * 0.4)
+
+# 4) 연속적 변화 (analog reasoning)
+temperature = smooth(prev_temp -> next_temp)
+
+# 5) AST와 의미곡선 실험
+concept = "digital-to-analog"
+EOF
+
+      # ----- 의미곡선 엔진 실행 -----
+      - name: "🧠 Run Meaning Curve Engine"
+        shell: bash
+        run: |
+          mkdir -p analog-output
+          echo "Running meaning curve engine..."
+          ./target/release/analog-ai-meaning-engine "input/sample.sp" > analog-output/curve.txt
+
+      # ----- SHA256 인증 -----
+      - name: "🔐 Generate SHA256 Proof"
+        shell: bash
+        run: |
+          sha256sum analog-output/curve.txt > analog-output/sha256.txt || \
+          shasum -a 256 analog-output/curve.txt > analog-output/sha256.txt
+
+      # ----- ProofLedger -----
+      - name: "📜 Create ProofLedger"
+        shell: bash
+        run: |
+          mkdir -p proof
+          {
+            echo "Analog-AI ProofLedger"
+            echo "timestamp=$(date -u)"
+            echo "commit=${GITHUB_SHA}"
+            echo "os=${RUNNER_OS}"
+            echo "source_file=input/sample.sp"
+            echo "curve=analog-output/curve.txt"
+            echo "sha256=$(cat analog-output/sha256.txt)"
+          } > proof/ledger.txt
+
+      # ----- 아티팩트 업로드 -----
+      - name: "📦 Upload Artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: analog-ai-${{ matrix.os }}
+          path: |
+            input/
+            analog-output/
+            proof/
