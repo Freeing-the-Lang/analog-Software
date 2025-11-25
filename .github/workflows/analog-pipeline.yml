@@ -1,10 +1,8 @@
-name: "🧠 Analog-AI — SpongeLang → Meaning Curve Engine (v3.0)"
+name: "🧠 Analog-AI — Meaning Curve Engine (v3.2)"
 
 on:
   push:
     branches: [ main ]
-    tags:
-      - "v*"
   pull_request:
     types: [ closed ]
   workflow_dispatch:
@@ -28,7 +26,6 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      # ----- 기본 -----
       - name: "📦 Checkout"
         uses: actions/checkout@v4
 
@@ -46,57 +43,33 @@ jobs:
         run: |
           choco install nasm -y
 
-      # ----- 컴파일 -----
       - name: "⚙️ Build Meaning Engine"
         run: cargo build --release
 
-      # ----- 테스트 -----
       - name: "🧪 SpongeLang Semantic Tests"
         run: cargo test --all --verbose
 
-      # ----- ★ example.sp를 '다른 디렉토리(examples/)'에 생성 -----
-      - name: "📄 Generate example.sp"
-        shell: bash
-        run: |
-          echo "Creating examples/example.sp..."
-          mkdir -p examples
-          cat << 'EOF' > examples/example.sp
-# Digital → Analog Thinking Demo
-# SpongeLang Example File (example.sp)
-
-# 1) 디지털식 분기 → 아날로그 해석
-if user_score > 80 -> pass
-else -> retry
-
-# 2) 아날로그 매핑
-emotion_level = map(feeling, 0..1 -> calm..focus)
-
-# 3) 의미 기반 함수 조합
-fn blend(a, b) = (a * 0.6) + (b * 0.4)
-
-# 4) 연속 의미 흐름 (analog reasoning)
-temperature = smooth(prev_temp -> next_temp)
-
-# 5) 디지털→아날로그 사고 실험
-concept = "digital-to-analog"
-EOF
-
-      # ----- 의미곡선 엔진 실행 -----
+      # ----- sample.sp 임베딩 없이 repo 내부 파일만 사용 -----
       - name: "🧠 Run Meaning Curve Engine"
         shell: bash
         run: |
           mkdir -p analog-output
           echo "Running meaning curve engine..."
-          ./target/release/analog-ai-meaning-engine "examples/example.sp" > analog-output/curve.txt
+          
+          # sample.sp MUST exist in repo
+          if [ ! -f "samples/sample.sp" ]; then
+            echo "❌ ERROR: samples/sample.sp not found in repository."
+            exit 1
+          fi
 
-      # ----- SHA256 인증 -----
+          ./target/release/analog-ai-meaning-engine "samples/sample.sp" > analog-output/curve.txt
+
       - name: "🔐 Generate SHA256 Proof"
         shell: bash
         run: |
           sha256sum analog-output/curve.txt > analog-output/sha256.txt || \
           shasum -a 256 analog-output/curve.txt > analog-output/sha256.txt
 
-      # ----- ProofLedger -----
       - name: "📜 Create ProofLedger"
         shell: bash
         run: |
@@ -106,17 +79,16 @@ EOF
             echo "timestamp=$(date -u)"
             echo "commit=${GITHUB_SHA}"
             echo "os=${RUNNER_OS}"
-            echo "source_file=examples/example.sp"
+            echo "source_file=samples/sample.sp"
             echo "curve=analog-output/curve.txt"
             echo "sha256=$(cat analog-output/sha256.txt)"
           } > proof/ledger.txt
 
-      # ----- 아티팩트 업로드 -----
       - name: "📦 Upload Artifacts"
         uses: actions/upload-artifact@v4
         with:
           name: analog-ai-${{ matrix.os }}
           path: |
-            examples/
+            samples/sample.sp
             analog-output/
             proof/
