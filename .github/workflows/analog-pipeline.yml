@@ -1,4 +1,4 @@
-name: "🧠 Analog-AI — Meaning Curve Engine (v4.2)"
+name: "🧠 Analog-AI — Meaning Curve Engine (v4.3)"
 
 on:
   push:
@@ -39,7 +39,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       # ---------------------------------------
-      # Install NASM (Platform Specific)
+      # Install NASM
       # ---------------------------------------
       - name: "📚 Install NASM (Linux)"
         if: runner.os == 'Linux'
@@ -69,19 +69,19 @@ jobs:
       # ---------------------------------------
       # Meaning Curve Generation — FIXED
       # ---------------------------------------
-      - name: "🧠 Run Meaning Curve Engine (Linux/macOS)"
+      - name: "🧠 Run Meaning Engine (Linux/macOS)"
         if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p analog-output
           ./target/release/analog-ai-meaning-engine "samples/sample.sp" > analog-output/curve.txt
 
-      - name: "🧠 Run Meaning Curve Engine (Windows)"
+      - name: "🧠 Run Meaning Engine (Windows)"
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           mkdir analog-output
-          .\target\release\analog-ai-meaning-engine.exe "samples/sample.sp" | Out-File -Encoding utf8 analog-output/curve.txt
+          .\target\release\analog-ai-meaning-engine.exe "samples/sample.sp" | Out-File -Encoding utf8 analog-output\curve.txt
 
       # ---------------------------------------
       # SHA256 + ProofLedger
@@ -119,7 +119,7 @@ jobs:
             proof/
 
 # ============================================================
-# RELEASE JOB (Auto Tag + Release)
+# RELEASE JOB
 # ============================================================
   create-release:
     name: "🚀 Auto Tag & Release"
@@ -142,13 +142,16 @@ jobs:
           VERSION="v$(date +'%Y%m%d-%H%M%S')"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      # -----------------------------
+      # Tagging
+      # -----------------------------
       - name: "🏷️ Create Tag"
         run: |
           git tag ${{ steps.version.outputs.version }}
           git push origin ${{ steps.version.outputs.version }}
 
       # -----------------------------
-      # Create Release
+      # Release Create
       # -----------------------------
       - name: "🚀 Create Release"
         uses: softprops/action-gh-release@v1
@@ -159,16 +162,18 @@ jobs:
           name: "Analog-AI — ${{ steps.version.outputs.version }}"
           body: |
             🧠 **Analog-AI Meaning Curve Engine Auto Release**
-            - Version: ${{ steps.version.outputs.version }}
-            - Multi-OS build (Linux, macOS, Windows)
-            - SHA256 Proof + ProofLedger included
+            - Multi-OS build
+            - SHA256 & ProofLedger included
 
       # -----------------------------
-      # Upload All Artifacts
+      # Download All Artifacts
       # -----------------------------
       - name: "📥 Download All Artifacts"
         uses: actions/download-artifact@v4
 
+      # -----------------------------
+      # Upload All artifacts — FIXED 404
+      # -----------------------------
       - name: "📤 Upload to Release"
         uses: softprops/action-gh-release@v1
         env:
