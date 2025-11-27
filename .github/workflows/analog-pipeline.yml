@@ -1,4 +1,4 @@
-name: "🧠 Analog-AI — Meaning Curve Engine (v4.3)"
+name: "🧠 Analog-AI — Meaning Curve Engine (v4.4)"
 
 on:
   push:
@@ -14,10 +14,10 @@ concurrency:
   group: analog-ai-${{ github.ref }}
   cancel-in-progress: false
 
-# ============================================================
-# BUILD JOB — 3OS Meaning Engine
-# ============================================================
 jobs:
+  # ============================================================
+  # BUILD JOB — 3OS Meaning Engine
+  # ============================================================
   analog-meaning-build:
     name: "🧠 Build & Run Meaning Curve Engine"
     runs-on: ${{ matrix.os }}
@@ -30,7 +30,7 @@ jobs:
 
     steps:
       # ---------------------------------------
-      # Checkout
+      # Checkout + Rust
       # ---------------------------------------
       - name: "📦 Checkout"
         uses: actions/checkout@v4
@@ -54,8 +54,7 @@ jobs:
 
       - name: "📚 Install NASM (Windows)"
         if: runner.os == 'Windows'
-        run: |
-          choco install nasm -y
+        run: choco install nasm -y
 
       # ---------------------------------------
       # Build Engine
@@ -67,7 +66,7 @@ jobs:
         run: cargo test --all --verbose
 
       # ---------------------------------------
-      # Meaning Curve Generation — FIXED
+      # Meaning Curve Engine (OS-specific execution)
       # ---------------------------------------
       - name: "🧠 Run Meaning Engine (Linux/macOS)"
         if: runner.os != 'Windows'
@@ -107,20 +106,34 @@ jobs:
           } > proof/ledger.txt
 
       # ---------------------------------------
-      # Upload artifacts
+      # ZIP PACKAGING (NEW)
       # ---------------------------------------
-      - name: "📦 Upload Artifacts"
+      - name: "📦 Create ZIP Package"
+        shell: bash
+        run: |
+          mkdir -p pkg
+          cp -r analog-output pkg/
+          cp -r proof pkg/
+          cp samples/sample.sp pkg/
+          cd pkg
+          zip -r analog-ai-${{ matrix.os }}.zip .
+
+      # ---------------------------------------
+      # Upload Artifacts (ZIP)
+      # ---------------------------------------
+      - name: "📤 Upload Artifacts"
         uses: actions/upload-artifact@v4
         with:
           name: analog-ai-${{ matrix.os }}
           path: |
-            samples/sample.sp
+            pkg/
             analog-output/
             proof/
+            samples/sample.sp
 
-# ============================================================
-# RELEASE JOB
-# ============================================================
+  # ============================================================
+  # RELEASE JOB
+  # ============================================================
   create-release:
     name: "🚀 Auto Tag & Release"
     runs-on: ubuntu-latest
@@ -143,7 +156,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       # -----------------------------
-      # Tagging
+      # Tag Creation
       # -----------------------------
       - name: "🏷️ Create Tag"
         run: |
@@ -151,9 +164,9 @@ jobs:
           git push origin ${{ steps.version.outputs.version }}
 
       # -----------------------------
-      # Release Create
+      # Create Release
       # -----------------------------
-      - name: "🚀 Create Release"
+      - name: "🚀 Create GitHub Release"
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -162,8 +175,9 @@ jobs:
           name: "Analog-AI — ${{ steps.version.outputs.version }}"
           body: |
             🧠 **Analog-AI Meaning Curve Engine Auto Release**
-            - Multi-OS build
-            - SHA256 & ProofLedger included
+            - Multi-OS build (Linux, macOS, Windows)
+            - ZIP packages included
+            - ProofLedger + SHA256 included
 
       # -----------------------------
       # Download All Artifacts
@@ -172,9 +186,9 @@ jobs:
         uses: actions/download-artifact@v4
 
       # -----------------------------
-      # Upload All artifacts — FIXED 404
+      # Upload to Release (404 FIXED)
       # -----------------------------
-      - name: "📤 Upload to Release"
+      - name: "📤 Upload All Files to Release"
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -184,4 +198,3 @@ jobs:
             analog-ai-ubuntu-latest/**
             analog-ai-macos-latest/**
             analog-ai-windows-latest/**
-
