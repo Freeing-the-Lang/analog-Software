@@ -1,4 +1,4 @@
-name: "🧠 Analog-AI — Meaning Curve Engine (v4.1)"
+name: "🧠 Analog-AI — Meaning Curve Engine (v4.2)"
 
 on:
   push:
@@ -14,6 +14,9 @@ concurrency:
   group: analog-ai-${{ github.ref }}
   cancel-in-progress: false
 
+# ============================================================
+# BUILD JOB — 3OS Meaning Engine
+# ============================================================
 jobs:
   analog-meaning-build:
     name: "🧠 Build & Run Meaning Curve Engine"
@@ -27,7 +30,7 @@ jobs:
 
     steps:
       # ---------------------------------------
-      # Checkout + Build Environment
+      # Checkout
       # ---------------------------------------
       - name: "📦 Checkout"
         uses: actions/checkout@v4
@@ -35,11 +38,19 @@ jobs:
       - name: "🦀 Setup Rust"
         uses: dtolnay/rust-toolchain@stable
 
-      - name: "📚 Install NASM (Linux/Mac)"
-        if: runner.os != 'Windows'
+      # ---------------------------------------
+      # Install NASM (Platform Specific)
+      # ---------------------------------------
+      - name: "📚 Install NASM (Linux)"
+        if: runner.os == 'Linux'
         run: |
-          sudo apt-get update || true
-          sudo apt-get install -y nasm || true
+          sudo apt-get update
+          sudo apt-get install -y nasm
+
+      - name: "📚 Install NASM (macOS)"
+        if: runner.os == 'macOS'
+        run: |
+          brew install nasm
 
       - name: "📚 Install NASM (Windows)"
         if: runner.os == 'Windows'
@@ -47,7 +58,7 @@ jobs:
           choco install nasm -y
 
       # ---------------------------------------
-      # Build Meaning Engine
+      # Build Engine
       # ---------------------------------------
       - name: "⚙️ Build Meaning Engine"
         run: cargo build --release
@@ -56,31 +67,32 @@ jobs:
         run: cargo test --all --verbose
 
       # ---------------------------------------
-      # Meaning Curve Generation
+      # Meaning Curve Generation — FIXED
       # ---------------------------------------
-      - name: "🧠 Run Meaning Curve Engine"
+      - name: "🧠 Run Meaning Curve Engine (Linux/macOS)"
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p analog-output
-          echo "Running meaning curve engine..."
-
-          if [ ! -f "samples/sample.sp" ]; then
-            echo "❌ ERROR: samples/sample.sp not found in repository."
-            exit 1
-          fi
-
           ./target/release/analog-ai-meaning-engine "samples/sample.sp" > analog-output/curve.txt
+
+      - name: "🧠 Run Meaning Curve Engine (Windows)"
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          mkdir analog-output
+          .\target\release\analog-ai-meaning-engine.exe "samples/sample.sp" | Out-File -Encoding utf8 analog-output/curve.txt
 
       # ---------------------------------------
       # SHA256 + ProofLedger
       # ---------------------------------------
-      - name: "🔐 Generate SHA256 Proof"
+      - name: "🔐 SHA256 Proof"
         shell: bash
         run: |
-          sha256sum analog-output/curve.txt > analog-output/sha256.txt || \
+          sha256sum analog-output/curve.txt > analog-output/sha256.txt 2>/dev/null || \
           shasum -a 256 analog-output/curve.txt > analog-output/sha256.txt
 
-      - name: "📜 Create ProofLedger"
+      - name: "📜 Generate ProofLedger"
         shell: bash
         run: |
           mkdir -p proof
@@ -89,13 +101,13 @@ jobs:
             echo "timestamp=$(date -u)"
             echo "commit=${GITHUB_SHA}"
             echo "os=${RUNNER_OS}"
-            echo "source_file=samples/sample.sp"
+            echo "source=samples/sample.sp"
             echo "curve=analog-output/curve.txt"
             echo "sha256=$(cat analog-output/sha256.txt)"
           } > proof/ledger.txt
 
       # ---------------------------------------
-      # Upload artifacts so release job can download
+      # Upload artifacts
       # ---------------------------------------
       - name: "📦 Upload Artifacts"
         uses: actions/upload-artifact@v4
@@ -106,13 +118,14 @@ jobs:
             analog-output/
             proof/
 
-  # =====================================================================
-  # RELEASE JOB (Auto Tag + Release)
-  # =====================================================================
+# ============================================================
+# RELEASE JOB (Auto Tag + Release)
+# ============================================================
   create-release:
     name: "🚀 Auto Tag & Release"
     runs-on: ubuntu-latest
     needs: analog-meaning-build
+
     permissions:
       contents: write
 
@@ -121,52 +134,49 @@ jobs:
         uses: actions/checkout@v4
 
       # -----------------------------
-      # VERSION GENERATION
+      # Version
       # -----------------------------
-      - name: "🔢 Generate Version (timestamp)"
+      - name: "🔢 Generate Version"
         id: version
         run: |
           VERSION="v$(date +'%Y%m%d-%H%M%S')"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      # -----------------------------
-      # TAG CREATION
-      # -----------------------------
       - name: "🏷️ Create Tag"
         run: |
           git tag ${{ steps.version.outputs.version }}
           git push origin ${{ steps.version.outputs.version }}
 
       # -----------------------------
-      # RELEASE CREATION
+      # Create Release
       # -----------------------------
-      - name: "🚀 Create GitHub Release"
+      - name: "🚀 Create Release"
         uses: softprops/action-gh-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # FIXES 422
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: "Analog-AI Release — ${{ steps.version.outputs.version }}"
+          name: "Analog-AI — ${{ steps.version.outputs.version }}"
           body: |
             🧠 **Analog-AI Meaning Curve Engine Auto Release**
-
             - Version: ${{ steps.version.outputs.version }}
-            - Generated automatically via GitHub Actions
-            - Includes multi-OS artifacts, meaning curve, SHA256, and ProofLedger.
+            - Multi-OS build (Linux, macOS, Windows)
+            - SHA256 Proof + ProofLedger included
 
       # -----------------------------
-      # UPLOAD ARTIFACTS TO RELEASE
+      # Upload All Artifacts
       # -----------------------------
       - name: "📥 Download All Artifacts"
         uses: actions/download-artifact@v4
 
-      - name: "📤 Upload Artifacts to Release"
+      - name: "📤 Upload to Release"
         uses: softprops/action-gh-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # FIXES 422
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.version.outputs.version }}
           files: |
             analog-ai-ubuntu-latest/**
             analog-ai-macos-latest/**
             analog-ai-windows-latest/**
+
